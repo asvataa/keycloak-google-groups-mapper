@@ -42,20 +42,17 @@ public class GoogleGroupsIdentityProviderMapper extends AbstractIdentityProvider
 
     public void init(Config.Scope config) {
         String serviceAccountUser = config.get(CONFIG_KEY_SERVICE_ACCOUNT_USER);
-
         if(serviceAccountUser == null) {
-            // TODO, can we determine the key in a better way? Should we throw a different exception?
-            throw new RuntimeException("Missing configuration key spi-identity-provider-mapper-" + PROVIDER_ID + "-" + CONFIG_KEY_SERVICE_ACCOUNT_USER);
+            throw new RuntimeException("Missing configuration key: " + CONFIG_KEY_SERVICE_ACCOUNT_USER);
         }
 
         String applicationName = config.get(CONFIG_KEY_APPLICATION_NAME, "keycloak");
         try {
             this.googleClient = new GoogleClient(applicationName, serviceAccountUser);
+            this.slugify = Slugify.builder().build();
         } catch(IOException e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Failed to initialize GoogleClient", e);
         }
-
-        this.slugify = Slugify.builder().build();
     }
 
     @Override
@@ -90,27 +87,27 @@ public class GoogleGroupsIdentityProviderMapper extends AbstractIdentityProvider
 
     @Override
     public void importNewUser(KeycloakSession keycloakSession, RealmModel realmModel, UserModel userModel, IdentityProviderMapperModel identityProviderMapperModel, BrokeredIdentityContext brokeredIdentityContext) {
-        updateUserGroups(realmModel, userModel, identityProviderMapperModel);
+        updateUserGroups(keycloakSession, realmModel, userModel, identityProviderMapperModel);
     }
 
     @Override
     public void updateBrokeredUser(KeycloakSession keycloakSession, RealmModel realmModel, UserModel userModel, IdentityProviderMapperModel identityProviderMapperModel, BrokeredIdentityContext brokeredIdentityContext) {
-        updateUserGroups(realmModel, userModel, identityProviderMapperModel);
+        updateUserGroups(keycloakSession, realmModel, userModel, identityProviderMapperModel);
     }
 
-    private void updateUserGroups(RealmModel realm, UserModel user, IdentityProviderMapperModel mapperModel) {
-        GroupModel parentGroup = getParentGroup(realm, mapperModel);
+    private void updateUserGroups(KeycloakSession keycloakSession, RealmModel realm, UserModel user, IdentityProviderMapperModel mapperModel) {
+        GroupModel parentGroup = getParentGroup(keycloakSession, realm, mapperModel);
+        if (parentGroup == null) {
+            throw new RuntimeException("Specified parent group does not exist.");
+        }
 
         List<String> userGroupNames = googleClient.getUsergroupNames(user.getEmail());
-
-        Set<String> targetGroups = userGroupNames.stream()
-                .map(slugify::slugify)
-                .collect(Collectors.toSet());
+        Set<String> targetGroups = userGroupNames.stream().map(slugify::slugify).collect(Collectors.toSet());
 
         HashSet<String> groupsToJoin = new HashSet<>(targetGroups);
         user.getGroupsStream().forEach(currentGroup -> {
-            if(parentGroup.equals(currentGroup.getParent())) {
-                if(targetGroups.contains(currentGroup.getName())) {
+            if (parentGroup.equals(currentGroup.getParent())) {
+                if (targetGroups.contains(currentGroup.getName())) {
                     groupsToJoin.remove(currentGroup.getName());
                 } else {
                     user.leaveGroup(currentGroup);
@@ -118,13 +115,11 @@ public class GoogleGroupsIdentityProviderMapper extends AbstractIdentityProvider
             }
         });
 
-        if(!groupsToJoin.isEmpty()) {
-            Map<String, GroupModel> existingGroups = parentGroup.getSubGroupsStream()
-                    .collect(Collectors.toMap(GroupModel::getName, identity()));
-
+        if (!groupsToJoin.isEmpty()) {
+            Map<String, GroupModel> existingGroups = parentGroup.getSubGroupsStream().collect(Collectors.toMap(GroupModel::getName, identity()));
             groupsToJoin.forEach(groupName -> {
-                GroupModel group = existingGroups.get(groupName);
-                if(group == null) {
+                GroupModel group = existingGroups.getOrDefault(groupName, null);
+                if (group == null) {
                     group = realm.createGroup(groupName, parentGroup);
                 }
                 user.joinGroup(group);
@@ -132,20 +127,11 @@ public class GoogleGroupsIdentityProviderMapper extends AbstractIdentityProvider
         }
     }
 
-    @Override
-    public void updateBrokeredUserLegacy(KeycloakSession keycloakSession, RealmModel realmModel, UserModel userModel, IdentityProviderMapperModel identityProviderMapperModel, BrokeredIdentityContext brokeredIdentityContext) {}
-
-    @Override
-    public String getHelpText() {
-        return "Adds the user to all groups that the user is a member of in Google";
-    }
-
-    public GroupModel getParentGroup(RealmModel realm, IdentityProviderMapperModel mapperModel) {
+    public GroupModel getParentGroup(KeycloakSession session, RealmModel realm, IdentityProviderMapperModel mapperModel) {
         String groupPath = mapperModel.getConfig().get(MAPPER_MODEL_KEY_PARENT_GROUP);
-        if(groupPath == null) {
+        if (groupPath == null || groupPath.isEmpty()) {
             throw new RuntimeException("No parent group configured.");
         }
-        return KeycloakModelUtils.findGroupByPath(realm, groupPath);
+        return KeycloakModelUtils.findGroupByPath(session, realm, groupPath);
     }
-
 }

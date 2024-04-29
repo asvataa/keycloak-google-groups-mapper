@@ -102,17 +102,14 @@ public class GoogleGroupsIdentityProviderMapper extends AbstractIdentityProvider
     }
 
     private void updateUserGroups(KeycloakSession keycloakSession, RealmModel realm, UserModel user, IdentityProviderMapperModel mapperModel) {
-        GroupModel parentGroup = getParentGroup(keycloakSession, realm, mapperModel);
-        if (parentGroup == null) {
-            throw new RuntimeException("Specified parent group does not exist.");
-        }
+        GroupModel parentGroup = getParentGroup(keycloakSession, realm, mapperModel); // Может вернуть null
 
         List<String> userGroupNames = googleClient.getAllGroupNames(user.getEmail());
         Set<String> targetGroups = userGroupNames.stream().map(slugify::slugify).collect(Collectors.toSet());
 
         HashSet<String> groupsToJoin = new HashSet<>(targetGroups);
         user.getGroupsStream().forEach(currentGroup -> {
-            if (parentGroup.equals(currentGroup.getParent())) {
+            if (parentGroup == null || parentGroup.equals(currentGroup.getParent())) {
                 if (targetGroups.contains(currentGroup.getName())) {
                     groupsToJoin.remove(currentGroup.getName());
                 } else {
@@ -122,9 +119,10 @@ public class GoogleGroupsIdentityProviderMapper extends AbstractIdentityProvider
         });
 
         if (!groupsToJoin.isEmpty()) {
-            Map<String, GroupModel> existingGroups = parentGroup.getSubGroupsStream().collect(Collectors.toMap(GroupModel::getName, identity()));
+            Map<String, GroupModel> existingGroups = (parentGroup == null ? realm.getTopLevelGroups() : parentGroup.getSubGroupsStream())
+                .collect(Collectors.toMap(GroupModel::getName, identity()));
             groupsToJoin.forEach(groupName -> {
-                GroupModel group = existingGroups.getOrDefault(groupName, null);
+                GroupModel group = existingGroups.get(groupName);
                 if (group == null) {
                     group = realm.createGroup(groupName, parentGroup);
                 }

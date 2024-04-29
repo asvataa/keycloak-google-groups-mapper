@@ -94,7 +94,11 @@ public class GoogleGroupsIdentityProviderMapper extends AbstractIdentityProvider
 
     @Override
     public void importNewUser(KeycloakSession keycloakSession, RealmModel realmModel, UserModel userModel, IdentityProviderMapperModel identityProviderMapperModel, BrokeredIdentityContext brokeredIdentityContext) {
-        updateUserGroups(keycloakSession, realmModel, userModel, identityProviderMapperModel);
+        try {
+            updateUserGroups(keycloakSession, realmModel, userModel, identityProviderMapperModel);
+        } catch (IOException e) {
+            throw new RuntimeException("Ошибка при получении групп пользователя: " + e.getMessage(), e);
+        }
     }
 
     @Override

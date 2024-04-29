@@ -3,6 +3,7 @@ package com.lunatech.keycloak.mappers.google;
 import com.github.slugify.Slugify;
 import org.keycloak.Config;
 import org.keycloak.broker.oidc.OIDCIdentityProviderFactory;
+import org.keycloak.social.google.GoogleIdentityProviderFactory;
 import org.keycloak.broker.provider.AbstractIdentityProviderMapper;
 import org.keycloak.broker.provider.BrokeredIdentityContext;
 import org.keycloak.models.*;
@@ -101,17 +102,15 @@ public class GoogleGroupsIdentityProviderMapper extends AbstractIdentityProvider
     }
 
     private void updateUserGroups(KeycloakSession keycloakSession, RealmModel realm, UserModel user, IdentityProviderMapperModel mapperModel) {
-        GroupModel parentGroup = getParentGroup(keycloakSession, realm, mapperModel);
-        if (parentGroup == null) {
-            throw new RuntimeException("Specified parent group does not exist.");
-        }
+        GroupModel parentGroup = getParentGroup(keycloakSession, realm, mapperModel); // Может вернуть null
 
-        List<String> userGroupNames = googleClient.getUsergroupNames(user.getEmail());
+        List<String> userGroupNames = googleClient.getAllGroupNames(user.getEmail());
         Set<String> targetGroups = userGroupNames.stream().map(slugify::slugify).collect(Collectors.toSet());
 
         HashSet<String> groupsToJoin = new HashSet<>(targetGroups);
+
         user.getGroupsStream().forEach(currentGroup -> {
-            if (parentGroup.equals(currentGroup.getParent())) {
+            if (parentGroup == null || parentGroup.equals(currentGroup.getParent())) {
                 if (targetGroups.contains(currentGroup.getName())) {
                     groupsToJoin.remove(currentGroup.getName());
                 } else {
@@ -121,9 +120,11 @@ public class GoogleGroupsIdentityProviderMapper extends AbstractIdentityProvider
         });
 
         if (!groupsToJoin.isEmpty()) {
-            Map<String, GroupModel> existingGroups = parentGroup.getSubGroupsStream().collect(Collectors.toMap(GroupModel::getName, identity()));
+            Map<String, GroupModel> existingGroups = (parentGroup == null ? realm.getTopLevelGroups() : parentGroup.getSubGroupsStream())
+                .collect(Collectors.toMap(GroupModel::getName, identity()));
+
             groupsToJoin.forEach(groupName -> {
-                GroupModel group = existingGroups.getOrDefault(groupName, null);
+                GroupModel group = existingGroups.get(groupName);
                 if (group == null) {
                     group = realm.createGroup(groupName, parentGroup);
                 }
@@ -132,10 +133,11 @@ public class GoogleGroupsIdentityProviderMapper extends AbstractIdentityProvider
         }
     }
 
+
     public GroupModel getParentGroup(KeycloakSession session, RealmModel realm, IdentityProviderMapperModel mapperModel) {
         String groupPath = mapperModel.getConfig().get(MAPPER_MODEL_KEY_PARENT_GROUP);
         if (groupPath == null || groupPath.isEmpty()) {
-            throw new RuntimeException("No parent group configured.");
+            return null;
         }
         return KeycloakModelUtils.findGroupByPath(session, realm, groupPath);
     }

@@ -61,6 +61,11 @@ public class GoogleGroupsIdentityProviderMapper extends AbstractIdentityProvider
     }
 
     @Override
+    public String getHelpText() {
+        return "Adds the user to all groups that the user is a member of in Google";
+    }
+
+    @Override
     public String[] getCompatibleProviders() {
         return new String[]{ OIDCIdentityProviderFactory.PROVIDER_ID };
     }

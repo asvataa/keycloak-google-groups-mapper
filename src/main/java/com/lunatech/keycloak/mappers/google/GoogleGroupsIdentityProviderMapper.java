@@ -69,7 +69,10 @@ public class GoogleGroupsIdentityProviderMapper extends AbstractIdentityProvider
 
     @Override
     public String[] getCompatibleProviders() {
-        return new String[]{ OIDCIdentityProviderFactory.PROVIDER_ID };
+        return new String[]{
+            OIDCIdentityProviderFactory.PROVIDER_ID,
+            GoogleIdentityProviderFactory.PROVIDER_ID
+        };
     }
 
     @Override

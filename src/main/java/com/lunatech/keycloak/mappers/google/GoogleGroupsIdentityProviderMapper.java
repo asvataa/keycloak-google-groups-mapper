@@ -106,10 +106,10 @@ public class GoogleGroupsIdentityProviderMapper extends AbstractIdentityProvider
         updateUserGroups(keycloakSession, realmModel, userModel, identityProviderMapperModel);
     }
 
-    private void updateUserGroups(KeycloakSession keycloakSession, RealmModel realm, UserModel user, IdentityProviderMapperModel mapperModel) {
+    private void updateUserGroups(KeycloakSession keycloakSession, RealmModel realm, UserModel user, IdentityProviderMapperModel mapperModel) throws IOException {
         GroupModel parentGroup = getParentGroup(keycloakSession, realm, mapperModel); // Может вернуть null
 
-        List<String> userGroupNames = googleClient.getAllGroupNames(user.getEmail());
+        List<String> userGroupNames = googleClient.getAllGroupNames(user.getEmail()); // Теперь здесь может быть выброшено IOException
         Set<String> targetGroups = userGroupNames.stream().map(slugify::slugify).collect(Collectors.toSet());
 
         HashSet<String> groupsToJoin = new HashSet<>(targetGroups);

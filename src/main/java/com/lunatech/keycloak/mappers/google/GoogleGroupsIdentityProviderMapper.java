@@ -119,7 +119,7 @@ public class GoogleGroupsIdentityProviderMapper extends AbstractIdentityProvider
         });
 
         if (!groupsToJoin.isEmpty()) {
-            Map<String, GroupModel> existingGroups = (parentGroup == null ? realm.getTopLevelGroups() : parentGroup.getSubGroupsStream())
+            Map<String, GroupModel> existingGroups = (parentGroup == null ? realm.getGroups() : parentGroup.getSubGroupsStream())
                 .collect(Collectors.toMap(GroupModel::getName, identity()));
             groupsToJoin.forEach(groupName -> {
                 GroupModel group = existingGroups.get(groupName);

@@ -34,9 +34,11 @@ class GoogleClient {
 
     public List<String> getUsergroupNames(String userKey) {
         try {
+            System.out.println("Requesting groups for user key: " + userKey);
             Groups groups = directory.groups().list().setUserKey(userKey).execute();
             return groups.getGroups().stream().map(Group::getName).collect(Collectors.toList());
         } catch(IOException e) {
+            System.err.println("Error fetching groups: " + e.getMessage());
             throw new RuntimeException(e);
         }
     }

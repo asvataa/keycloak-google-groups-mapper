@@ -43,9 +43,10 @@ public class GoogleGroupsIdentityProviderMapper extends AbstractIdentityProvider
     public GoogleGroupsIdentityProviderMapper() {}
 
     public void init(Config.Scope config) {
-        String serviceAccountUser = config.get(CONFIG_KEY_SERVICE_ACCOUNT_USER);
-        if(serviceAccountUser == null) {
-            throw new RuntimeException("Missing configuration key: " + CONFIG_KEY_SERVICE_ACCOUNT_USER);
+        String serviceAccountUser = System.getenv("KEYCLOAK_GOOGLE_SERVICE_ACCOUNT_USER");
+        System.out.println("Service Account User: " + serviceAccountUser);
+        if (serviceAccountUser == null || serviceAccountUser.isEmpty()) {
+            throw new RuntimeException("Missing configuration key: service-account-user");
         }
 
         String applicationName = config.get(CONFIG_KEY_APPLICATION_NAME, "keycloak");
